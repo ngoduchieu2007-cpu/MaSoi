@@ -1,113 +1,105 @@
-from character import *
-from util import *
+# Ban choi tren terminal.
+# Chay: python main.py
+
+from util import setup_roles, build_players, ask_name
+from engine import GameEngine, ONGOING, VILLAGE_WIN
+
+
+class ConsoleIO:
+    def log(self, msg):
+        print(msg)
+
+    def ask_hunter(self, name):
+        ans = input(f"{name} la Tho san, ban ai? (Enter de bo qua): ").strip()
+        return ans or None
+
+
+def night_phase(engine):
+    players = engine.players
+    engine.start_night()
+    print(f"\n>>> ĐÊM {engine.day}")
+
+    # cupid chi dem 1
+    cupids = engine.alive("Cupid")
+    if engine.day == 1 and cupids:
+        print("[Quản trò] Gọi Cupid.")
+        p1 = ask_name("Ghép đôi - người 1: ", players)
+        p2 = ask_name("Ghép đôi - người 2: ", players)
+        if p1 and p2 and p1 != p2:
+            cupids[0].link(players[p1], players[p2])
+            print(f"Đã ghép đôi {p1} và {p2}.")
+
+    # bao ve
+    if engine.alive("Protector"):
+        print("[Quản trò] Gọi Bảo vệ.")
+        t = ask_name("Bảo vệ ai? ", players)
+        if t:
+            players[t].is_protected = True
+
+    # soi
+    if engine.alive("Werewolf"):
+        print("[Quản trò] Gọi Sói.")
+        engine.wolf_target = ask_name("Sói cắn ai? ", players)
+
+    # phu thuy
+    witches = engine.alive("Witch")
+    if witches:
+        witch = witches[0]
+        print(f"[Quản trò] Gọi Phù thuỷ (cứu={witch.has_heal}, độc={witch.has_poison}).")
+        if engine.wolf_target:
+            print(f"-> Đêm nay {engine.wolf_target} bị cắn.")
+            if witch.has_heal and input("Cứu? (y/n): ").lower() == "y":
+                if witch.use_heal():
+                    engine.wolf_target = None
+        if witch.has_poison and input("Dùng độc? (y/n): ").lower() == "y":
+            t = ask_name("Đầu độc ai? ", players)
+            if t and witch.use_poison():
+                engine.resolve_death(t)
+
+    # tien tri
+    seers = engine.alive("Seer")
+    if seers:
+        print("[Quản trò] Gọi Tiên tri.")
+        t = ask_name("Soi ai? ", players)
+        if t:
+            print(f"-> {t} là: {seers[0].see(players[t])}")
+
+    engine.resolve_night()
+
+
+def day_phase(engine):
+    print(f"\n>>> NGÀY {engine.day}")
+    alive = [f"{n}[{c.role}]" for n, c in engine.players.items() if c.is_alive]
+    print("Người còn sống:", ", ".join(alive))
+
+    t = ask_name("Ai bị treo cổ? ", engine.players)
+    if t:
+        engine.resolve_death(t)
+
 
 def main():
-    raw_roles = start()
-    players = setup_game_objects(raw_roles)
-    day_count = 1
+    players = build_players(setup_roles())
+    engine = GameEngine(players, ConsoleIO())
 
-    print("\n" + "-"*30)
-    print("Role (Quản trò xem):")
-    for name, char_name in raw_roles.items():
-        print(f"{name}: {char_name}")
-    print("="*30 + "\nGAME BẮT ĐẦU!")
+    print("\n--- VAI (chỉ quản trò xem) ---")
+    for name, c in players.items():
+        print(f"{name}: {c.role}")
+    print("=== GAME BẮT ĐẦU ===")
 
     while True:
-        print(f"\n>>> ĐÊM THỨ {day_count}")
-        for p in players.values():
-            p.reset_status()
+        night_phase(engine)
+        if engine.check_win() != ONGOING:
+            break
+        day_phase(engine)
+        if engine.check_win() != ONGOING:
+            break
+        engine.day += 1
 
-        died_tonight = []
-        wolf_target_name = None
+    if engine.check_win() == VILLAGE_WIN:
+        print("\n>>> PHE DÂN THẮNG!")
+    else:
+        print("\n>>> PHE SÓI THẮNG!")
 
-        # 0. CUPID (Chỉ đêm 1)
-        if day_count == 1:
-            cupids = [p for p in players.values() if p.role == 'Cupid']
-            if cupids:
-                print(f"[Quản trò] Gọi Cupid dậy.")
-                p1 = get_target("Người thứ 1 được ghép đôi: ", players)
-                p2 = get_target("Người thứ 2 được ghép đôi: ", players)
-                if p1 and p2 and p1 != p2:
-                    cupids[0].link(players[p1], players[p2])
-                    print(f"-> Đã ghép đôi {p1} và {p2}.")
-
-        # 1. BẢO VỆ
-        protectors = [p for p in players.values() if p.role == 'Protecter' and p.is_alive]
-        if protectors:
-            print(f"[Quản trò] Gọi Bảo vệ.")
-            target = get_target("Bảo vệ ai? ", players)
-            if target: players[target].is_protected = True
-
-        # 2. SÓI
-        wolves = [p for p in players.values() if p.role == 'Werewolf' and p.is_alive]
-        if wolves:
-            print(f"[Quản trò] Gọi Sói.")
-            wolf_target_name = get_target("Sói cắn ai? ", players)
-        
-        # 3. PHÙ THỦY
-        witches = [p for p in players.values() if p.role == 'Witch' and p.is_alive]
-        if witches:
-            witch = witches[0]
-            print(f"[Quản trò] Gọi Phù thủy (Heal={witch.has_heal}, Psn={witch.has_poison}).")
-            
-            if wolf_target_name:
-                print(f"-> {wolf_target_name} bị cắn.")
-                if witch.has_heal:
-                    if input("Cứu? (y/n): ").lower() == 'y':
-                        witch.rescue(players[wolf_target_name])
-                        wolf_target_name = None 
-            
-            if witch.has_poison:
-                if input("Dùng độc? (y/n): ").lower() == 'y':
-                    t = get_target("Đầu độc ai? ", players)
-                    if t: 
-                        witch.kill(players[t])
-                        # Xử lý cái chết ngay lập tức cho thuốc độc
-                        handle_death(t, players, died_tonight)
-
-        # 4. TIÊN TRI
-        seers = [p for p in players.values() if p.role == 'Seer' and p.is_alive]
-        if seers:
-            print(f"[Quản trò] Gọi Tiên tri.")
-            t = get_target("Soi ai? ", players)
-            if t: print(f"-> {t} là {seers[0].see(players[t])}")
-
-        # --- TỔNG KẾT ĐÊM ---
-        if wolf_target_name:
-            target_obj = players[wolf_target_name]
-            if target_obj.is_protected:
-                print(f"(Debug) {wolf_target_name} được bảo vệ.")
-            else:
-                # Xử lý cái chết do Sói cắn
-                handle_death(wolf_target_name, players, died_tonight)
-
-        # --- BUỔI SÁNG ---
-        print(f"\n>>> NGÀY THỨ {day_count}")
-        if not died_tonight:
-            print("Đêm qua bình yên.")
-        else:
-            print("Người chết đêm qua:", ", ".join(died_tonight))
-
-        if check_win(players): break
-
-        print("\nNgười còn sống:", ", ".join([f"{n}[{c.role}]" for n,c in players.items() if c.is_alive]))
-
-        # VOTE
-        print("\n[VOTE TREO CỔ]")
-        voted_name = get_target("Ai bị treo cổ? ", players)
-        
-        if voted_name:
-            # Xử lý cái chết do Vote
-            handle_death(voted_name, players, []) # List rỗng vì ko cần track died_tonight nữa
-        
-        if check_win(players): break
-        
-        day_count += 1
-    
-    # End Game
-    st = check_win(players)
-    if st == 1: print("\n>>> PHE DÂN THẮNG!")
-    elif st == 2: print("\n>>> PHE SÓI THẮNG!")
 
 if __name__ == "__main__":
     main()

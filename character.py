@@ -1,76 +1,70 @@
-class General_Character:
+# Các vai trong game. Mỗi class chỉ giữ trạng thái + hành động riêng,
+# còn luật chơi để bên engine.py xử lý.
+
+class Character:
+    role = "Character"
+
     def __init__(self):
         self.is_alive = True
         self.is_protected = False
-        self.role = None
-        self.lover = None # Thêm thuộc tính người yêu (cho Cupid)
+        self.lover = None   # người được Cupid ghép đôi
 
-    def reset_status(self):
+    def reset_night(self):
         self.is_protected = False
 
-class Villager(General_Character):
-    def __init__(self):
-        super().__init__() 
-        self.role = 'Villager'
 
-class Werewolf(General_Character):
+class Villager(Character):
+    role = "Villager"
+
+
+class Werewolf(Character):
+    role = "Werewolf"
+
+
+class Seer(Character):
+    role = "Seer"
+
+    def see(self, target):
+        if target.role == "Werewolf":
+            return "Sói (xấu)"
+        return "Người tốt"
+
+
+class Protector(Character):
+    role = "Protector"
+
+    def protect(self, target):
+        target.is_protected = True
+
+
+class Witch(Character):
+    role = "Witch"
+
     def __init__(self):
         super().__init__()
-        self.role = 'Werewolf'
-
-class Witch(General_Character):
-    def __init__(self):
-        super().__init__()
-        self.role = 'Witch'
         self.has_heal = True
         self.has_poison = True
 
-    def kill(self, target: General_Character):
-        if self.has_poison:
-            target.is_alive = False
-            self.has_poison = False
-            return True
-        return False
-    
-    def rescue(self, target: General_Character):
+    def use_heal(self):
         if self.has_heal:
-            target.is_alive = True
             self.has_heal = False
             return True
         return False
 
-class Seer(General_Character):
-    def __init__(self):
-        super().__init__() 
-        self.role = 'Seer'
+    def use_poison(self):
+        if self.has_poison:
+            self.has_poison = False
+            return True
+        return False
 
-    def see(self, target: General_Character):
-        return "Là Sói (Bad)" if target.role == 'Werewolf' else "Người tốt (Good)"
 
-class Protecter(General_Character):
-    def __init__(self):
-        super().__init__()
-        self.role = 'Protecter'
-    
-    def protect(self, target: General_Character):
-        target.is_protected = True
+class Hunter(Character):
+    role = "Hunter"
 
-# --- NEW ROLES ---
 
-class Hunter(General_Character):
-    def __init__(self):
-        super().__init__()
-        self.role = 'Hunter'
-        self.has_shot = False # Tránh bắn 2 lần nếu được hồi sinh (optional)
+class Cupid(Character):
+    role = "Cupid"
 
-class Cupid(General_Character):
-    def __init__(self):
-        super().__init__()
-        self.role = 'Cupid'
-        self.has_linked = False # Cupid chỉ ghép đôi 1 lần đầu game
-
-    def link(self, p1: General_Character, p2: General_Character):
-        # Ghép đôi 2 chiều
+    def link(self, p1, p2):
         p1.lover = p2
         p2.lover = p1
-        self.has_linked = True
